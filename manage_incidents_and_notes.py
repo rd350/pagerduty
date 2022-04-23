@@ -253,7 +253,7 @@ def main():
     except KeyError:
       sys.exit("Export your PD_API_KEY")
 
-      pd = PD(api_key)
+    pd = PD(api_key)
 
     try:
       if args.command == 'ack':
