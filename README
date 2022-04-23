@@ -1,3 +1,6 @@
+Use the Pagerduty API to acknowledge, resolve and add notes to incidents
+
+_________________________________________________________________________
 usage: manage_incidents_and_notes.py [-h] {ack,resolve-all,add-notes} ...
 
 Acknowledge, resolve and add notes to pagerduty incidents
