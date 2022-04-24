@@ -59,6 +59,48 @@ class PD():
         headers["From"] = f"{self._me()[1]}"
         return headers
 
+    def _get_my_incidents(self, status=None):
+        """
+        Get all incidents escalated to user id based on since, until and
+        status of either triggered or acknowledged
+
+        Pagination enabled
+        """
+
+        more = True
+        limit = 100
+        offset = 0
+        incidents = []
+
+        while more == True:
+            url = f"{URL}/incidents"
+            params = {
+                "statuses[]": status,
+                "user_ids[]": self._me()[0],
+                "team_ids[]": self._me()[3],
+                "time_zone" : self._me()[2],
+                "since"     : since,
+                "until"     : until,
+                "sort_by"   : "incident_number:desc",
+                "limit"     : limit,
+                "offset"    : offset,
+            }
+            r = self.s.get(url, headers=self._get_headers(), params=params)
+            data = r.json()
+
+            for element in data['incidents']:
+                incidents.append(element)
+
+            offset = limit + offset
+
+            # Loop until more is False
+            more = data['more']
+
+        if not data['incidents']:
+            print ("No incidents found")
+
+        return incidents
+
     def ack_all(self):
         """
         Acknowledge all the triggered incidents allocated to me
@@ -102,80 +144,27 @@ class PD():
                 data=json.dumps(data)
             )
 
-    def _get_my_incidents(self, status=None):
+    def _prompt(self):
         """
-        Get all incidents escalated to user id based on since, until and
-        status of either triggered or acknowledged
-
-        Pagination enabled
+        User prompt for adding notes
         """
 
-        more = True
-        limit = 100
-        offset = 0
-        incidents = []
+        note = input("Enter a note: ")
+        return note
 
-        while more == True:
-            url = f"{URL}/incidents"
-            params = {
-                "statuses[]": status,
-                "user_ids[]": self._me()[0],
-                "team_ids[]": self._me()[3],
-                "time_zone" : self._me()[2],
-                "since"     : since,
-                "until"     : until,
-                "sort_by"   : "incident_number:desc",
-                "limit"     : limit,
-                "offset"    : offset,
-            }
-            r = self.s.get(url, headers=self._get_headers(), params=params)
-            data = r.json()
-
-            for element in data['incidents']:
-                incidents.append(element)
-
-            offset = limit + offset
-
-            # Loop until more is False
-            more = data['more']
-
-        if not data['incidents']:
-            print ("No incidents found")
-
-        return incidents
-
-    def add_notes(self):
+    def _list_notes(self, incident_id):
         """
-        Add notes
+        List note of an incident
         """
 
-        print("\nLooking for incidents that need notes added - ")
+        url = f"{URL}/incidents/{incident_id}/notes"
+        r = self.s.get(url, headers=self._get_headers())
+        data = r.json()
 
-        for incident in self._list_incidents():
-
-            # Add a note if below 2 conditions are met -
-                # Check if incident has a note added already and
-                # Verify if resolved incident was first triggered to your user id
-            if (self._list_notes(incident['id']) == False and
-                incident['first_trigger_log_entry']['agent']['id']
-                == self._me()[0]):
-
-                print(f"Adding note to {incident['summary']}")
-
-                url = f"{URL}/incidents/{incident['id']}/notes"
-                data = {
-                    "note":{
-                        "content": self._prompt()
-                    },
-                }
-                self.s.post(
-                    url,
-                    headers=self._post_headers(),
-                    data=json.dumps(data)
-                )
-                print("Done\n-------------------------------------------------")
-
-        print("All your incidents have notes!")
+        if not data['notes']:
+            return False
+        else:
+            return True
 
     def _list_incidents(self):
         """
@@ -217,27 +206,38 @@ class PD():
 
         return incidents
 
-    def _list_notes(self, incident_id):
+    def add_notes(self):
         """
-        List note of an incident
-        """
-
-        url = f"{URL}/incidents/{incident_id}/notes"
-        r = self.s.get(url, headers=self._get_headers())
-        data = r.json()
-
-        if not data['notes']:
-            return False
-        else:
-            return True
-
-    def _prompt(self):
-        """
-        User prompt for adding notes
+        Add notes
         """
 
-        note = input("Enter a note: ")
-        return note
+        print("\nLooking for incidents that need notes added - ")
+
+        for incident in self._list_incidents():
+
+            # Add a note if below 2 conditions are met -
+                # Check if incident has a note added already and
+                # Verify if resolved incident was first triggered to your user id
+            if (self._list_notes(incident['id']) == False and
+                incident['first_trigger_log_entry']['agent']['id']
+                == self._me()[0]):
+
+                print(f"Adding note to {incident['summary']}")
+
+                url = f"{URL}/incidents/{incident['id']}/notes"
+                data = {
+                    "note":{
+                        "content": self._prompt()
+                    },
+                }
+                self.s.post(
+                    url,
+                    headers=self._post_headers(),
+                    data=json.dumps(data)
+                )
+                print("Done\n-------------------------------------------------")
+
+        print("All your incidents have notes!")
 
 
 def main():
