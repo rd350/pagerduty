@@ -21,14 +21,12 @@ class PD():
 
     def __init__(self, api_key):
         """ Initiate session """
-        
         # Using pdpyras for session
         self._api_key = api_key
         self.s        = APISession(self._api_key)
 
     def _me(self):
-        """ Get user id, email, time zone and team id """
-        
+        """ Gets your user id, email, time zone and team id """
         # Using pdpyras for auth
         try:
             data = self.s.rget('users/me')
@@ -77,15 +75,15 @@ class PD():
         while more == True:
             url = f"{URL}/incidents"
             params = {
-                "statuses[]": f"{status}",
-                "user_ids[]": f"{self._me()[0]}",
-                "team_ids[]": f"{self._me()[3]}",
-                "time_zone" : f"{self._me()[2]}",
-                "since"     : f"{since}",
-                "until"     : f"{until}",
+                "statuses[]": status,
+                "user_ids[]": self._me()[0],
+                "team_ids[]": self._me()[3],
+                "time_zone" : self._me()[2],
+                "since"     : since,
+                "until"     : until,
                 "sort_by"   : "incident_number:desc",
-                "limit"     : f"{limit}",
-                "offset"    : f"{offset}",
+                "limit"     : limit,
+                "offset"    : offset,
             }
             r = self.s.get(url, headers=self._get_headers(), params=params)
             data = r.json()
@@ -105,7 +103,7 @@ class PD():
 
     def ack_all(self):
         """
-        Acknowledge all the triggered incidents allocated to user
+        Acknowledge all the triggered incidents allocated to me
         """
 
         for incident in self._get_my_incidents('triggered'):
@@ -127,7 +125,7 @@ class PD():
 
     def resolve_all(self):
         """
-        Resolve all the acknowledged incidents allocated to user
+        Resolve all my acknowledged incidents
         """
 
         for incident in self._get_my_incidents('acknowledged'):
@@ -186,13 +184,13 @@ class PD():
             params = {
                 "statuses[]": "resolved",
                 "include[]" : ['first_trigger_log_entries', 'channel'],
-                "team_ids[]": f"{self._me()[3]}",
-                "time_zone" : f"{self._me()[2]}",
-                "since"     : f"{since}",
-                "until"     : f"{until}",
+                "team_ids[]": self._me()[3],
+                "time_zone" : self._me()[2],
+                "since"     : since,
+                "until"     : until,
                 "sort_by"   : "incident_number:desc",
-                "limit"     : f"{limit}",
-                "offset"    : f"{offset}",
+                "limit"     : limit,
+                "offset"    : offset,
                 "total"     : "true",
             }
             r = self.s.get(url, headers=self._get_headers(), params=params)
@@ -217,7 +215,13 @@ class PD():
         print("\nLooking for incidents that need notes added - ")
 
         for incident in self._list_incidents():
-            if self._list_notes(incident['id']) == False:
+
+            # Add a note if below 2 conditions are met -
+                # Check if incident has a note added already and
+                # Verify if resolved incident was first triggered to your user id
+            if (self._list_notes(incident['id']) == False and
+                incident['first_trigger_log_entry']['agent']['id']
+                == self._me()[0]):
 
                 print(f"Adding note to {incident['summary']}")
 
