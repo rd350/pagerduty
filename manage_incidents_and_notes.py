@@ -215,14 +215,15 @@ class PD():
 
         for incident in self._list_incidents():
 
-            # Add a note if below 2 conditions are met -
-                # Check if incident has a note added already and
-                # Verify if resolved incident was first triggered to your user id
-            if (self._list_notes(incident['id']) == False and
-                incident['first_trigger_log_entry']['agent']['id']
-                == self._me()[0]):
+            if (self._list_notes(incident['id']) == False):
 
-                print(f"Adding note to {incident['summary']}")
+                n = input(f"\nThis your incident? - {incident['summary']} (y/n): ")
+                if (n.lower() == 'n'):
+                    continue
+                elif (n.lower() == 'y'):
+                    pass
+                else:
+                    sys.exit("WHAT?")
 
                 url = f"{URL}/incidents/{incident['id']}/notes"
                 data = {
@@ -237,7 +238,8 @@ class PD():
                 )
                 print("Done\n-------------------------------------------------")
 
-        print("All your incidents have notes!")
+        print("Notes added to incidents you chose!")
+
 
 
 def main():
