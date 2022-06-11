@@ -21,12 +21,14 @@ class PD():
 
     def __init__(self, api_key):
         """ Initiate session """
+
         # Using pdpyras for session
         self._api_key = api_key
         self.s        = APISession(self._api_key)
 
     def _me(self):
-        """ Gets your user id, email, time zone and team id """
+        """ Get user id, email, time zone and team id """
+
         # Using pdpyras for auth
         try:
             data = self.s.rget('users/me')
@@ -39,6 +41,7 @@ class PD():
                 sys.exit("Your PD account does not exist?")
             else:
                 sys.exit(e)
+
         except pdpyras.PDClientError as e:
             sys.exit("Non-transient network or client error")
 
@@ -61,7 +64,7 @@ class PD():
 
     def _get_my_incidents(self, status=None):
         """
-        Get all incidents escalated to user id based on since, until and
+        Get all incidents escalated to user based on since, until and
         status of either triggered or acknowledged
 
         Pagination enabled
@@ -93,7 +96,7 @@ class PD():
 
             offset = limit + offset
 
-            # Loop until more is False
+            # Loop until more is False for pagination
             more = data['more']
 
         if not data['incidents']:
@@ -103,7 +106,7 @@ class PD():
 
     def ack_all(self):
         """
-        Acknowledge all the triggered incidents allocated to me
+        Acknowledge all the triggered incidents allocated to user
         """
 
         for incident in self._get_my_incidents('triggered'):
@@ -125,7 +128,7 @@ class PD():
 
     def resolve_all(self):
         """
-        Resolve all my acknowledged incidents
+        Resolve all the acknowledged incidents allocated to user
         """
 
         for incident in self._get_my_incidents('acknowledged'):
@@ -151,6 +154,20 @@ class PD():
 
         note = input("Enter a note: ")
         return note
+
+    def _resolve_prompt(self):
+        """
+        User prompt for resolving acknowledged incidents
+        """
+
+        i = input("\nWant me to resolve any pending ack'd incidents? (y/n): ")
+
+        if (i.lower() == 'y'):
+            return True
+        elif (i.lower() == 'n'):
+            return False
+        else:
+            sys.exit("WHAT?")
 
     def _list_notes(self, incident_id):
         """
@@ -206,45 +223,98 @@ class PD():
 
         return incidents
 
-    def add_notes(self):
+    def _list_log_entries(self):
         """
-        Add notes
+        List log entries.
+
+        Pagination is enabled.
         """
 
-        print("\nLooking for incidents that need notes added - ")
+        more = True
+        limit = 100
+        offset = 0
+        log_entries = []
+
+        while more == True:
+            url = f"{URL}/log_entries"
+            params = {
+                "include[]"  : "incidents",
+                "team_ids[]" : self._me()[3],
+                "time_zone"  : self._me()[2],
+                "since"      : since,
+                "until"      : until,
+                "limit"      : limit,
+                "offset"     : offset,
+                "is_overview": "true",
+                "total"      : "true",
+            }
+            r = self.s.get(url, headers=self._get_headers(), params=params)
+            data = r.json()
+
+            for element in data['log_entries']:
+                log_entries.append(element)
+
+            offset = limit + offset
+            more = data['more']
+
+        return log_entries
+
+    def _get_user_from_log(self, incident_id):
+        """
+        Get user id of a resolved incident by looking at the
+        assign log entry
+        """
+
+        for log_entry in self._list_log_entries():
+            if (log_entry['type'] == "assign_log_entry" and
+                log_entry['agent']['id'] == self._me()[0] and
+                log_entry['incident']['id'] == incident_id):
+                match = True
+                break
+            match = False
+
+        if match == True:
+            return True
+        else:
+            return False
+
+    def add_notes(self):
+        """
+        Add a note to resolved incidents
+        """
+
+        print("\nLooking for incidents that need notes added: ")
 
         for incident in self._list_incidents():
 
-            if (self._list_notes(incident['id']) == False):
+            # Get the user who acknowledged the incident because resolved
+            # incidents do not have a user tied to it.
+            if (self._get_user_from_log(incident['id']) == True):
 
-                n = input(f"\nThis your incident? - {incident['summary']} (y/n): ")
-                if (n.lower() == 'n'):
-                    continue
-                elif (n.lower() == 'y'):
-                    pass
-                else:
-                    sys.exit("WHAT?")
+                # Add a note if not added already
+                if (self._list_notes(incident['id']) == False):
+                    print(f"Adding note to {incident['summary']}")
 
-                url = f"{URL}/incidents/{incident['id']}/notes"
-                data = {
-                    "note":{
-                        "content": self._prompt()
-                    },
-                }
-                self.s.post(
-                    url,
-                    headers=self._post_headers(),
-                    data=json.dumps(data)
-                )
-                print("Done\n-------------------------------------------------")
+                    url = f"{URL}/incidents/{incident['id']}/notes"
+                    data = {
+                        "note":{
+                            "content": self._prompt()
+                        },
+                    }
+                    self.s.post(
+                        url,
+                        headers=self._post_headers(),
+                        data=json.dumps(data)
+                    )
+                    print("Done\n---------------------------------------------")
 
-        print("Notes added to incidents you chose!")
-
+        print("All your incidents may have notes!")
 
 
 def main():
     epilog = ("Requirements: install pdpyras lib (pip install pdpyras) and "
               "export PD_API_KEY")
+
     parser = argparse.ArgumentParser(description=__doc__, epilog=epilog)
     subparsers = parser.add_subparsers(dest="command")
     subparsers.required = True
